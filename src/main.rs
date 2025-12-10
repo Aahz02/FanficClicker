@@ -1,5 +1,5 @@
 use iced::time::{self, Instant, seconds};
-use iced::widget::{button, column, row, Row, Column, text};
+use iced::widget::{Column, Row, button, column, row, text};
 use iced::{Element, Subscription};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -57,18 +57,24 @@ impl GameState {
             all_tags: Vec::new(),
             unlocked_tags: Vec::new(),
             active_tags: Vec::new(),
-            all_upgrades : vec![
+            all_upgrades: vec![
                 Upgrade {
                     name: String::from("Clone"),
-                    flavor_text: String::from("Make a clone of yourself to write for you, still more ethical than AI!"),
-                    desc: String::from("Automatically uploads works for you, 1 per stack every five seconds."),
+                    flavor_text: String::from(
+                        "Make a clone of yourself to write for you, still more ethical than AI!",
+                    ),
+                    desc: String::from(
+                        "Automatically uploads works for you, 1 per stack every five seconds.",
+                    ),
                     multiplier: 0.0,
                     count: 5,
                     cost: 15,
                 },
                 Upgrade {
                     name: String::from("Beta Reader"),
-                    flavor_text: String::from("Get your friends to read your works before you upload them, free labor."),
+                    flavor_text: String::from(
+                        "Get your friends to read your works before you upload them, free labor.",
+                    ),
                     desc: String::from("Increases how many kudos you earn by 1% per stack."),
                     multiplier: 0.1,
                     count: 10,
@@ -136,16 +142,32 @@ impl GameState {
         match message {
             Message::Upload => {
                 self.upload_story();
-            },
+            }
             Message::Tick(_) => {
                 self.tick();
-            },
+            }
             Message::BuyTag(tag) => {
                 todo!();
-            },
-            Message::BuyUpgrade(upgrade) => {
-                todo!();
-            },
+            }
+            Message::BuyUpgrade(mut upgrade) => {
+                if upgrade.name == "???" {
+                    return ();
+                }
+                for index in 0..self.upgrades.len() {
+                    if self.upgrades[index] == upgrade.name {
+                        upgrade.cost += 5 * self.upgrades[index].count;
+                    }
+                    if self.kudos >= upgrade.cost as f64 {
+                        self.upgrades[index].count += 1;
+                        self.kudos -= upgrade.cost as f64;
+                    }
+                    return ();
+                }
+                if self.kudos >= upgrade.cost as f64 {
+                    self.kudos -= upgrade.cost as f64;
+                    self.upgrades.push(upgrade);
+                }
+            }
         }
     }
 
@@ -154,16 +176,27 @@ impl GameState {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let buyable =|name: String| button(text(name));
+        let buyable = |name: String| button(text(name));
         let upload = button("Upload Work").on_press(Message::Upload);
         let mut upgrades: Column<'_, Message> = Column::new();
         let mut curr_row = Vec::new();
         for mut upgrade in self.all_upgrades.clone() {
             if self.highest_kudos < upgrade.cost as f64 {
-                upgrade = Upgrade { name: String::from("???"), flavor_text: String::from(""), desc: String::from(""), multiplier: 0.0, count: 0, cost: 0 }
+                upgrade = Upgrade {
+                    name: String::from("???"),
+                    flavor_text: String::from(""),
+                    desc: String::from(""),
+                    multiplier: 0.0,
+                    count: 0,
+                    cost: 0,
+                }
             }
             if curr_row.len() < 4 {
-                curr_row.push(buyable(upgrade.name.clone()).on_press(Message::BuyUpgrade(upgrade.clone())).into());
+                curr_row.push(
+                    buyable(upgrade.name.clone())
+                        .on_press(Message::BuyUpgrade(upgrade.clone()))
+                        .into(),
+                );
             } else {
                 upgrades = upgrades.push(Row::from_vec(curr_row));
                 curr_row = Vec::new();
@@ -179,9 +212,10 @@ impl GameState {
         let content = row![column![kudos, upload], upgrades];
         content.into()
     }
-
 }
 
 fn main() -> iced::Result {
-    iced::application(GameState::default, GameState::update, GameState::view).subscription(GameState::subscription).run()
+    iced::application(GameState::default, GameState::update, GameState::view)
+        .subscription(GameState::subscription)
+        .run()
 }
