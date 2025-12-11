@@ -1,3 +1,5 @@
+use std::cmp;
+
 use iced::font::{Font, Style};
 use iced::time::{self, Instant, seconds};
 use iced::widget::{Column, Row, button, center, column, container, row, text, tooltip};
@@ -16,6 +18,7 @@ enum Category {
 struct Tag {
     name: String,
     categories: Vec<Category>,
+    cost: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -55,7 +58,28 @@ struct GameState {
 impl GameState {
     fn default() -> Self {
         GameState {
-            all_tags: Vec::new(),
+            all_tags: vec![
+                Tag {
+                    name: String::from("Confession"),
+                    categories: vec![Category::Fluff, Category::Romance],
+                    cost: 5,
+                },
+                Tag {
+                    name: String::from("Monsters"),
+                    categories: vec![Category::Horror, Category::AU],
+                    cost: 5,
+                },
+                Tag {
+                    name: String::from("Lover's Spat"),
+                    categories: vec![Category::Angst, Category::Romance],
+                    cost: 10,
+                },
+                Tag {
+                    name: String::from("Hallucinations"),
+                    categories: vec![Category::Angst, Category::Horror],
+                    cost: 10,
+                },
+            ],
             unlocked_tags: Vec::new(),
             active_tags: Vec::new(),
             all_upgrades: vec![
@@ -108,8 +132,12 @@ impl GameState {
             }
         }
         let mut sum: f64 = 0.0;
-        for count in category_counts {
-            sum += count as f64;
+        for index in 0..category_counts.len() {
+            if found_categories[index] == Category::AU {
+                sum += cmp::max(10 - 2 * category_counts[index], 0) as f64;
+            } else {
+                sum += category_counts[index] as f64;
+            }
         }
         sum * 0.1 + 0.5
     }
@@ -201,8 +229,34 @@ impl GameState {
                     cost: 0,
                 }
             }
-            if curr_row.len() < 4 {
+            let mut count: usize = 0;
+            let mut cost: usize = 0;
+            for index in 0..self.upgrades.len() {
+                if self.upgrades[index] == upgrade.name {
+                    count = self.upgrades[index].count;
+                }
+            }
+            cost = upgrade.cost + 5 * count;
+            if curr_row.len() < 3 {
                 curr_row.push(
+                    tooltip(
+                        buyable(upgrade.name.clone())
+                            .on_press(Message::BuyUpgrade(upgrade.clone())),
+                        container(column![
+                            text(upgrade.flavor_text.clone()).font(Font {
+                                style: Style::Italic,
+                                ..Default::default()
+                            }),
+                            text(upgrade.desc.clone()),
+                            text!("Owned: {}/{} Price: {}", count, upgrade.count, cost)
+                        ]),
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
+                );
+            } else {
+                upgrades = upgrades.push(Row::from_vec(curr_row));
+                curr_row = vec![
                     tooltip(
                         buyable(upgrade.name.clone())
                             .on_press(Message::BuyUpgrade(upgrade.clone())),
@@ -216,10 +270,7 @@ impl GameState {
                         tooltip::Position::Bottom,
                     )
                     .into(),
-                );
-            } else {
-                upgrades = upgrades.push(Row::from_vec(curr_row));
-                curr_row = Vec::new();
+                ];
             }
             if upgrade.name == "???" {
                 break;
@@ -228,12 +279,50 @@ impl GameState {
         if !curr_row.is_empty() {
             upgrades = upgrades.push(Row::from_vec(curr_row));
         }
+        let mut unbought_tags: Column<'_, Message> = Column::new();
+        curr_row = Vec::new();
+        for mut tag in self.all_tags.clone() {
+            if self.highest_kudos < tag.cost as f64 {
+                tag = Tag {
+                    name: String::from("???"),
+                    categories: Vec::new(),
+                    cost: 0,
+                }
+            }
+            if curr_row.len() < 3 {
+                curr_row.push(
+                    tooltip(
+                        buyable(tag.name.clone()).on_press(Message::BuyTag(tag.clone())),
+                        container(text!("Price: {}", tag.cost)),
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
+                );
+            } else {
+                unbought_tags = unbought_tags.push(Row::from_vec(curr_row));
+                curr_row = vec![
+                    tooltip(
+                        buyable(tag.name.clone()).on_press(Message::BuyTag(tag.clone())),
+                        container(text!("Price: {}", tag.cost)),
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
+                ];
+            }
+            if tag.name == "???" {
+                break;
+            }
+        }
+        if !curr_row.is_empty() {
+            unbought_tags = unbought_tags.push(Row::from_vec(curr_row));
+        }
         let kudos = text!("{:.0} kudos", self.kudos);
         let content = column![
             text("Fanfic Clicker"),
             row![
                 container(column![kudos, upload]).align_left(Fill),
-                column![text("Upgrades:"), upgrades]
+                container(column![text("Tags:")]).align_x(Center),
+                container(column![text("Upgrade Shop:"), upgrades, text("Tag Shop:"), unbought_tags]).align_right(Fill)
             ]
         ];
         content.into()
