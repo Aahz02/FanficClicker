@@ -415,3 +415,60 @@ fn main() -> iced::Result {
         .subscription(GameState::subscription)
         .run()
 }
+
+#[test]
+fn test_upload() {
+    let mut gamestate = GameState::default();
+    gamestate.upload_story();
+    assert_eq!(gamestate.kudos, 1.0);
+}
+
+#[test]
+fn test_buy_upgrade() {
+    let mut gamestate = GameState::default();
+    let upgrade = Upgrade {
+        name: String::from("Clone"),
+        flavor_text: String::from(
+            "Make a clone of yourself to write for you, still more ethical than AI!",
+        ),
+        desc: String::from("Automatically uploads works for you, 1 per stack every five seconds."),
+        multiplier: 0.0,
+        count: 5,
+        cost: 15,
+    };
+    gamestate.kudos = 15.0;
+    gamestate.update(Message::BuyUpgrade(upgrade));
+    assert!(!gamestate.upgrades.is_empty());
+}
+
+#[test]
+fn test_buy_tag() {
+    let mut gamestate = GameState::default();
+    let tag = Tag {
+        name: String::from("Confession"),
+        categories: vec![Category::Fluff, Category::Romance],
+        cost: 5,
+        active: false,
+    };
+    gamestate.kudos = 5.0;
+    gamestate.update(Message::BuyTag(tag));
+    assert!(!gamestate.unlocked_tags.is_empty());
+}
+
+#[test]
+fn test_buy_upgrade_fail() {
+    let mut gamestate = GameState::default();
+    let upgrade = Upgrade {
+        name: String::from("Clone"),
+        flavor_text: String::from(
+            "Make a clone of yourself to write for you, still more ethical than AI!",
+        ),
+        desc: String::from("Automatically uploads works for you, 1 per stack every five seconds."),
+        multiplier: 0.0,
+        count: 5,
+        cost: 15,
+    };
+    gamestate.kudos = 5.0;
+    gamestate.update(Message::BuyUpgrade(upgrade));
+    assert!(gamestate.upgrades.is_empty());
+}
