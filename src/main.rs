@@ -2,7 +2,7 @@ use std::cmp;
 
 use iced::font::{Font, Style};
 use iced::time::{self, Instant, seconds};
-use iced::widget::{Column, Row, button, center, column, container, row, text, tooltip};
+use iced::widget::{Column, Row, button, column, container, row, text, tooltip};
 use iced::{Center, Element, Fill, Subscription};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -19,6 +19,13 @@ struct Tag {
     name: String,
     categories: Vec<Category>,
     cost: usize,
+    active: bool,
+}
+
+impl PartialEq for Tag {
+    fn eq(&self, other: &Tag) -> bool {
+        self.name == other.name
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -37,18 +44,21 @@ impl PartialEq<String> for Upgrade {
     }
 }
 
+// allow is used here because time::every requires the message given to it to have an Instant
+// attached to it but it doesn't get used anywhere
+#[allow(dead_code)]
 #[derive(Clone)]
 enum Message {
     Upload,
     Tick(Instant),
     BuyTag(Tag),
+    ToggleTag(Tag),
     BuyUpgrade(Upgrade),
 }
 
 struct GameState {
     all_tags: Vec<Tag>,
     unlocked_tags: Vec<Tag>,
-    active_tags: Vec<Tag>,
     all_upgrades: Vec<Upgrade>,
     upgrades: Vec<Upgrade>,
     kudos: f64,
@@ -63,25 +73,28 @@ impl GameState {
                     name: String::from("Confession"),
                     categories: vec![Category::Fluff, Category::Romance],
                     cost: 5,
+                    active: false,
                 },
                 Tag {
                     name: String::from("Monsters"),
                     categories: vec![Category::Horror, Category::AU],
                     cost: 5,
+                    active: false,
                 },
                 Tag {
                     name: String::from("Lover's Spat"),
                     categories: vec![Category::Angst, Category::Romance],
                     cost: 10,
+                    active: false,
                 },
                 Tag {
                     name: String::from("Hallucinations"),
                     categories: vec![Category::Angst, Category::Horror],
                     cost: 10,
+                    active: false,
                 },
             ],
             unlocked_tags: Vec::new(),
-            active_tags: Vec::new(),
             all_upgrades: vec![
                 Upgrade {
                     name: String::from("Clone"),
@@ -115,7 +128,10 @@ impl GameState {
     fn calc_tag_bonus(&self) -> f64 {
         let mut found_categories: Vec<Category> = Vec::new();
         let mut category_counts: Vec<usize> = Vec::new();
-        for tag in &self.active_tags {
+        for tag in &self.unlocked_tags {
+            if !tag.active {
+                continue;
+            }
             for category in &tag.categories {
                 let mut index: usize = 0;
                 while index < found_categories.len() {
@@ -184,6 +200,13 @@ impl GameState {
                     self.unlocked_tags.push(tag);
                 }
             }
+            Message::ToggleTag(tag) => {
+                for index in 0..self.unlocked_tags.len() {
+                    if self.unlocked_tags[index].name == tag.name {
+                        self.unlocked_tags[index].active = !self.unlocked_tags[index].active;
+                    }
+                }
+            }
             Message::BuyUpgrade(mut upgrade) => {
                 if upgrade.name == "???" {
                     return ();
@@ -236,26 +259,38 @@ impl GameState {
                 }
             }
             let mut count: usize = 0;
-            let mut cost: usize = 0;
             for index in 0..self.upgrades.len() {
                 if self.upgrades[index] == upgrade.name {
                     count = self.upgrades[index].count;
                 }
             }
-            cost = upgrade.cost + 5 * count;
+            let style = if count == upgrade.count && upgrade.name != String::from("???") {
+                button::secondary
+            } else {
+                button::primary
+            };
+            let cost = upgrade.cost + 5 * count;
             if curr_row.len() < 3 {
                 curr_row.push(
                     tooltip(
                         buyable(upgrade.name.clone())
-                            .on_press(Message::BuyUpgrade(upgrade.clone())),
+                            .on_press(Message::BuyUpgrade(upgrade.clone()))
+                            .style(style),
                         container(column![
                             text(upgrade.flavor_text.clone()).font(Font {
                                 style: Style::Italic,
                                 ..Default::default()
                             }),
                             text(upgrade.desc.clone()),
-                            text!("Owned: {}/{} Price: {}", count, upgrade.count, cost)
-                        ]).style(container::bordered_box),
+                            text(if upgrade.name == String::from("???") {
+                                "".to_string()
+                            } else if count != upgrade.count {
+                                format!("Owned: {}/{} Price: {}", count, upgrade.count, cost)
+                            } else {
+                                "Sold Out".to_string()
+                            })
+                        ])
+                        .style(container::bordered_box),
                         tooltip::Position::Bottom,
                     )
                     .into(),
@@ -265,14 +300,16 @@ impl GameState {
                 curr_row = vec![
                     tooltip(
                         buyable(upgrade.name.clone())
-                            .on_press(Message::BuyUpgrade(upgrade.clone())),
+                            .on_press(Message::BuyUpgrade(upgrade.clone()))
+                            .style(style),
                         container(column![
                             text(upgrade.flavor_text.clone()).font(Font {
                                 style: Style::Italic,
                                 ..Default::default()
                             }),
                             text(upgrade.desc.clone()),
-                        ]).style(container::bordered_box),
+                        ])
+                        .style(container::bordered_box),
                         tooltip::Position::Bottom,
                     )
                     .into(),
@@ -288,11 +325,15 @@ impl GameState {
         let mut unbought_tags: Column<'_, Message> = Column::new();
         curr_row = Vec::new();
         for mut tag in self.all_tags.clone() {
+            if self.unlocked_tags.contains(&tag) {
+                continue;
+            }
             if self.highest_kudos < tag.cost as f64 {
                 tag = Tag {
                     name: String::from("???"),
                     categories: Vec::new(),
                     cost: 0,
+                    active: false,
                 }
             }
             if curr_row.len() < 3 {
@@ -322,13 +363,47 @@ impl GameState {
         if !curr_row.is_empty() {
             unbought_tags = unbought_tags.push(Row::from_vec(curr_row));
         }
+        let mut tags: Column<'_, Message> = Column::new();
+        curr_row = Vec::new();
+        for tag in self.unlocked_tags.clone() {
+            let style = if !tag.active {
+                button::secondary
+            } else {
+                button::primary
+            };
+            if curr_row.len() < 3 {
+                curr_row.push(
+                    buyable(tag.name.clone())
+                        .on_press(Message::ToggleTag(tag.clone()))
+                        .style(style)
+                        .into(),
+                );
+            } else {
+                tags = tags.push(Row::from_vec(curr_row));
+                curr_row = vec![
+                    buyable(tag.name.clone())
+                        .on_press(Message::ToggleTag(tag.clone()))
+                        .style(style)
+                        .into(),
+                ];
+            }
+        }
+        if !curr_row.is_empty() {
+            tags = tags.push(Row::from_vec(curr_row));
+        }
         let kudos = text!("{:.0} kudos", self.kudos);
         let content = column![
             text("Fanfic Clicker"),
             row![
                 container(column![kudos, upload]).align_left(Fill),
-                container(column![text("Tags:")]).align_x(Center),
-                container(column![text("Upgrade Shop:"), upgrades, text("Tag Shop:"), unbought_tags]).align_right(Fill)
+                container(column![text("Tags:"), tags]).align_x(Center),
+                container(column![
+                    text("Upgrade Shop:"),
+                    upgrades,
+                    text("Tag Shop:"),
+                    unbought_tags
+                ])
+                .align_right(Fill)
             ]
         ];
         content.into()
