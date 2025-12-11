@@ -176,7 +176,13 @@ impl GameState {
                 self.tick();
             }
             Message::BuyTag(tag) => {
-                todo!();
+                if tag.name == "???" {
+                    return ();
+                }
+                if self.kudos >= tag.cost as f64 {
+                    self.kudos -= tag.cost as f64;
+                    self.unlocked_tags.push(tag);
+                }
             }
             Message::BuyUpgrade(mut upgrade) => {
                 if upgrade.name == "???" {
@@ -249,7 +255,7 @@ impl GameState {
                             }),
                             text(upgrade.desc.clone()),
                             text!("Owned: {}/{} Price: {}", count, upgrade.count, cost)
-                        ]),
+                        ]).style(container::bordered_box),
                         tooltip::Position::Bottom,
                     )
                     .into(),
@@ -266,7 +272,7 @@ impl GameState {
                                 ..Default::default()
                             }),
                             text(upgrade.desc.clone()),
-                        ]),
+                        ]).style(container::bordered_box),
                         tooltip::Position::Bottom,
                     )
                     .into(),
@@ -293,7 +299,7 @@ impl GameState {
                 curr_row.push(
                     tooltip(
                         buyable(tag.name.clone()).on_press(Message::BuyTag(tag.clone())),
-                        container(text!("Price: {}", tag.cost)),
+                        container(text!("Price: {}", tag.cost)).style(container::bordered_box),
                         tooltip::Position::Bottom,
                     )
                     .into(),
@@ -303,7 +309,7 @@ impl GameState {
                 curr_row = vec![
                     tooltip(
                         buyable(tag.name.clone()).on_press(Message::BuyTag(tag.clone())),
-                        container(text!("Price: {}", tag.cost)),
+                        container(text!("Price: {}", tag.cost)).style(container::bordered_box),
                         tooltip::Position::Bottom,
                     )
                     .into(),
