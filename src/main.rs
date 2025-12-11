@@ -193,7 +193,7 @@ impl GameState {
             }
             Message::BuyTag(tag) => {
                 if tag.name == "???" {
-                    return ();
+                    return;
                 }
                 if self.kudos >= tag.cost as f64 {
                     self.kudos -= tag.cost as f64;
@@ -209,7 +209,7 @@ impl GameState {
             }
             Message::BuyUpgrade(mut upgrade) => {
                 if upgrade.name == "???" {
-                    return ();
+                    return;
                 }
                 for index in 0..self.upgrades.len() {
                     if self.upgrades[index] == upgrade.name {
@@ -221,7 +221,7 @@ impl GameState {
                             self.upgrades[index].count += 1;
                             self.kudos -= upgrade.cost as f64;
                         }
-                        return ();
+                        return;
                     }
                 }
                 if self.kudos >= upgrade.cost as f64 {
@@ -264,7 +264,7 @@ impl GameState {
                     count = self.upgrades[index].count;
                 }
             }
-            let style = if count == upgrade.count && upgrade.name != String::from("???") {
+            let style = if count == upgrade.count && upgrade.name != "???" {
                 button::secondary
             } else {
                 button::primary
@@ -282,7 +282,7 @@ impl GameState {
                                 ..Default::default()
                             }),
                             text(upgrade.desc.clone()),
-                            text(if upgrade.name == String::from("???") {
+                            text(if upgrade.name == "???" {
                                 "".to_string()
                             } else if count != upgrade.count {
                                 format!("Owned: {}/{} Price: {}", count, upgrade.count, cost)
