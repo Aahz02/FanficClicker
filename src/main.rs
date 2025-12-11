@@ -1,6 +1,7 @@
+use iced::font::{Font, Style};
 use iced::time::{self, Instant, seconds};
-use iced::widget::{Column, Row, button, column, row, text};
-use iced::{Element, Subscription};
+use iced::widget::{Column, Row, button, center, column, container, row, text, tooltip};
+use iced::{Center, Element, Fill, Subscription};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Category {
@@ -156,15 +157,19 @@ impl GameState {
                 for index in 0..self.upgrades.len() {
                     if self.upgrades[index] == upgrade.name {
                         upgrade.cost += 5 * self.upgrades[index].count;
+
+                        if self.kudos >= upgrade.cost as f64
+                            && self.upgrades[index].count < upgrade.count
+                        {
+                            self.upgrades[index].count += 1;
+                            self.kudos -= upgrade.cost as f64;
+                        }
+                        return ();
                     }
-                    if self.kudos >= upgrade.cost as f64 {
-                        self.upgrades[index].count += 1;
-                        self.kudos -= upgrade.cost as f64;
-                    }
-                    return ();
                 }
                 if self.kudos >= upgrade.cost as f64 {
                     self.kudos -= upgrade.cost as f64;
+                    upgrade.count = 1;
                     self.upgrades.push(upgrade);
                 }
             }
@@ -172,7 +177,12 @@ impl GameState {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        time::every(seconds(5)).map(Message::Tick)
+        for upgrade in self.upgrades.clone() {
+            if upgrade == String::from("Clone") {
+                return time::every(seconds(5)).map(Message::Tick);
+            }
+        }
+        Subscription::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -193,9 +203,19 @@ impl GameState {
             }
             if curr_row.len() < 4 {
                 curr_row.push(
-                    buyable(upgrade.name.clone())
-                        .on_press(Message::BuyUpgrade(upgrade.clone()))
-                        .into(),
+                    tooltip(
+                        buyable(upgrade.name.clone())
+                            .on_press(Message::BuyUpgrade(upgrade.clone())),
+                        container(column![
+                            text(upgrade.flavor_text.clone()).font(Font {
+                                style: Style::Italic,
+                                ..Default::default()
+                            }),
+                            text(upgrade.desc.clone()),
+                        ]),
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
                 );
             } else {
                 upgrades = upgrades.push(Row::from_vec(curr_row));
@@ -209,7 +229,13 @@ impl GameState {
             upgrades = upgrades.push(Row::from_vec(curr_row));
         }
         let kudos = text!("{:.0} kudos", self.kudos);
-        let content = row![column![kudos, upload], upgrades];
+        let content = column![
+            text("Fanfic Clicker"),
+            row![
+                container(column![kudos, upload]).align_left(Fill),
+                column![text("Upgrades:"), upgrades]
+            ]
+        ];
         content.into()
     }
 }
